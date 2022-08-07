@@ -1,6 +1,3 @@
-use std::path::PathBuf;
-
-use asefile::{AsepriteFile, AsepriteParseError};
 use iced::{
     canvas::{event::Status, Event},
     mouse,
@@ -11,7 +8,7 @@ use iced::{
     Color, Length, Point, Size, Vector,
 };
 
-use crate::Message;
+use crate::{Message, Tiles};
 
 const TILES_PER_LINE: u32 = 5;
 const SCALE_FACTOR: u32 = 4;
@@ -19,11 +16,19 @@ const SCALE_FACTOR: u32 = 4;
 #[derive(Default)]
 pub struct TileSelector {
     selected: Option<u32>,
-    content: Option<AsepriteFile>,
+    content: Tiles,
     cache: canvas::Cache,
 }
 
 impl TileSelector {
+    pub fn new(tiles: Tiles) -> Self {
+        TileSelector {
+            selected: None,
+            content: tiles,
+            cache: Default::default(),
+        }
+    }
+
     pub fn view(&self) -> Element<'_, crate::Message> {
         Canvas::new(self)
             .width(Length::Units(
@@ -31,7 +36,7 @@ impl TileSelector {
                     .try_into()
                     .unwrap(),
             ))
-            .height(Length::Units(match &self.content {
+            .height(Length::Units(match &*self.content.borrow() {
                 Some(content) => {
                     ((((content.num_frames() as f32 / TILES_PER_LINE as f32).ceil() as u32) * 9
                         + 1)
@@ -44,15 +49,8 @@ impl TileSelector {
             .into()
     }
 
-    pub fn set_content(&mut self, file: &PathBuf) -> Result<(), AsepriteParseError> {
-        self.content = Some(AsepriteFile::read_file(file)?);
-        self.selected = Some(2);
-        self.cache.clear();
-        Ok(())
-    }
-
     pub fn select(&mut self, i: u32) {
-        match &self.content {
+        match &*self.content.borrow() {
             Some(content) => {
                 if i < content.num_frames() {
                     self.selected = Some(i);
@@ -67,6 +65,12 @@ impl TileSelector {
         self.selected = None;
         self.cache.clear();
     }
+
+    pub fn reset(&mut self) {
+        self.selected = None;
+        self.cache.clear();
+        // do NOT reset reference to tiles, otherwise it’s lost forever !
+    }
 }
 
 impl canvas::Program<Message> for TileSelector {
@@ -79,7 +83,7 @@ impl canvas::Program<Message> for TileSelector {
         bounds: iced::Rectangle,
         cursor: iced::canvas::Cursor,
     ) -> (iced::canvas::event::Status, Option<Message>) {
-        if self.content.is_none() {
+        if self.content.borrow().is_none() {
             return (Status::Ignored, None);
         }
 
@@ -122,7 +126,7 @@ impl canvas::Program<Message> for TileSelector {
         _cursor: iced::canvas::Cursor,
     ) -> Vec<iced::canvas::Geometry> {
         let selector = self.cache.draw(bounds.size(), |frame| {
-            if let Some(content) = &self.content {
+            if let Some(content) = &*self.content.borrow() {
                 // for each tile
                 for i in 0..content.num_frames() {
                     // for each pixel in the tile

@@ -9,17 +9,22 @@ use iced::{
 };
 
 use rfd::{AsyncFileDialog, AsyncMessageDialog};
-use std::path::PathBuf;
+use std::{cell::RefCell, path::PathBuf, rc::Rc};
 
-use asefile::AsepriteParseError;
+use asefile::{AsepriteFile, AsepriteParseError};
 
+mod mapviewer;
+mod tilemap;
 mod tileselector;
 
+use mapviewer::MapViewer;
 use tileselector::TileSelector;
 
 fn main() -> iced::Result {
     TilemapEditor::run(Settings::default())
 }
+
+pub type Tiles = Rc<RefCell<Option<AsepriteFile>>>;
 
 #[derive(Default)]
 struct TilemapEditor {
@@ -27,13 +32,15 @@ struct TilemapEditor {
     loading_tiles: bool,
     error_message: bool,
     tile_selector: TileSelector,
+    tiles: Tiles,
+    map_viewer: MapViewer,
 }
 
 #[derive(Debug, Clone)]
 pub enum Message {
     OpenTiles,
     TilesOpened(Option<PathBuf>),
-    ErrorClosed(()),
+    ErrorClosed(()), // unit type needed for command
     TileSelected(u32),
     TileUnSelected,
 }
@@ -44,12 +51,15 @@ impl Application for TilemapEditor {
     type Flags = ();
 
     fn new(_flags: Self::Flags) -> (Self, Command<Message>) {
+        let tiles = Rc::new(RefCell::new(None));
         (
             TilemapEditor {
                 tiles_file: None,
                 loading_tiles: false,
                 error_message: false,
-                tile_selector: TileSelector::default(),
+                tile_selector: TileSelector::new(tiles.clone()),
+                tiles,
+                map_viewer: MapViewer::default(),
             },
             Command::none(),
         )
@@ -85,7 +95,7 @@ impl Application for TilemapEditor {
                             .push(Button::new("Open tiles").on_press(Message::OpenTiles)),
                     )
                     .push(vertical_rule(2))
-                    .push(Column::new()),
+                    .push(Column::new().push(self.map_viewer.view())),
             )
             .into()
     }
@@ -115,13 +125,17 @@ impl Application for TilemapEditor {
                 self.loading_tiles = false;
 
                 if new_tiles.is_some() {
-                    match self.tile_selector.set_content(new_tiles.as_ref().unwrap()) {
-                        Ok(_) => {
+                    let file = AsepriteFile::read_file(&new_tiles.as_ref().unwrap());
+                    match file {
+                        Ok(f) => {
                             self.tiles_file = new_tiles;
+                            *self.tiles.borrow_mut() = Some(f);
+
+                            self.tile_selector.reset();
                         }
                         Err(err) => {
                             return Command::perform(
-                                Self::error_with_tiles(new_tiles.unwrap(), err),
+                                Self::error_with_tiles(new_tiles.clone().unwrap(), err),
                                 Message::ErrorClosed,
                             )
                         }
