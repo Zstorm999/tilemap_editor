@@ -1,13 +1,14 @@
 use iced::{
+    executor,
     pure::{
         horizontal_rule, scrollable, vertical_rule,
         widget::{Button, Column, Row, Text},
-        Sandbox,
+        Application,
     },
-    Alignment, Length, Settings,
+    Alignment, Command, Length, Settings,
 };
 
-use rfd::{FileDialog, MessageDialog};
+use rfd::{AsyncFileDialog, AsyncMessageDialog};
 use std::path::PathBuf;
 
 fn main() -> iced::Result {
@@ -17,18 +18,28 @@ fn main() -> iced::Result {
 #[derive(Default)]
 struct TilemapEditor {
     tiles_file: Option<PathBuf>,
+    loading_tiles: bool,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 enum Message {
     OpenTiles,
+    TilesOpened(Option<PathBuf>),
 }
 
-impl Sandbox for TilemapEditor {
+impl Application for TilemapEditor {
     type Message = Message;
+    type Executor = executor::Default;
+    type Flags = ();
 
-    fn new() -> Self {
-        TilemapEditor { tiles_file: None }
+    fn new(_flags: Self::Flags) -> (Self, Command<Message>) {
+        (
+            TilemapEditor {
+                tiles_file: None,
+                loading_tiles: false,
+            },
+            Command::none(),
+        )
     }
 
     fn title(&self) -> String {
@@ -65,24 +76,47 @@ impl Sandbox for TilemapEditor {
             .into()
     }
 
-    fn update(&mut self, message: Self::Message) {
+    fn update(&mut self, message: Self::Message) -> Command<Message> {
+        // don’t process any event if a file is loading
+
         match message {
             Message::OpenTiles => {
-                if self.tiles_file.is_some() {
-                    match MessageDialog::new().set_level(rfd::MessageLevel::Warning).set_buttons(rfd::MessageButtons::OkCancel).set_title("Tilesheet already loaded").set_description("A tilesheet is already loaded. Loading a new one will overwrite the previous one, and may break your map").show() {
-                        false => return,
-                        true => {},
-                    }
+                if self.loading_tiles {
+                    return Command::none();
                 }
+                self.loading_tiles = true;
 
-                let new_tiles = FileDialog::new()
-                    .add_filter("aseprite", &["ase", "aseprite"])
-                    .pick_file();
-
+                return Command::perform(
+                    Self::open_tiles(self.tiles_file.is_some()),
+                    Message::TilesOpened,
+                );
+            }
+            Message::TilesOpened(new_tiles) => {
                 if new_tiles.is_some() {
                     self.tiles_file = new_tiles;
                 }
+
+                self.loading_tiles = false;
             }
         }
+
+        Command::none()
+    }
+}
+
+impl TilemapEditor {
+    async fn open_tiles(has_a_file: bool) -> Option<PathBuf> {
+        if has_a_file {
+            match AsyncMessageDialog::new().set_level(rfd::MessageLevel::Warning).set_buttons(rfd::MessageButtons::OkCancel).set_title("Tilesheet already loaded").set_description("A tilesheet is already loaded. Loading a new one will overwrite the previous one, and may break your map").show().await {
+                false => return None,
+                true => {},
+            }
+        }
+
+        return AsyncFileDialog::new()
+            .add_filter("aseprite", &["ase", "aseprite"])
+            .pick_file()
+            .await
+            .map(|h| h.path().into());
     }
 }
