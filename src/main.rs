@@ -1,9 +1,10 @@
 use iced::{
     pure::{
+        horizontal_rule, scrollable, vertical_rule,
         widget::{Button, Column, Row, Text},
         Sandbox,
     },
-    Settings,
+    Alignment, Length, Settings,
 };
 
 use rfd::{FileDialog, MessageDialog};
@@ -20,7 +21,7 @@ struct TilemapEditor {
 
 #[derive(Debug, Clone, Copy)]
 enum Message {
-    OpenFile,
+    OpenTiles,
 }
 
 impl Sandbox for TilemapEditor {
@@ -36,17 +37,37 @@ impl Sandbox for TilemapEditor {
 
     fn view(&self) -> iced::pure::Element<'_, Self::Message> {
         Column::new()
-            .push(Button::new(Text::new("Open")).on_press(Message::OpenFile))
-            .push(Text::new(match &self.tiles_file {
-                Some(path) => path.to_str().unwrap().to_string(),
-                None => "No file selected".to_string(),
-            }))
+            // menu bar
+            .push(
+                Row::new()
+                    .push(Button::new(Text::new("Open")))
+                    .push(Button::new(Text::new("Save"))),
+            )
+            .push(horizontal_rule(2))
+            // window content
+            .push(
+                Row::new()
+                    .push(
+                        // tiles column
+                        Column::new()
+                            .align_items(Alignment::Center)
+                            .width(Length::Units(200))
+                            .push(Text::new(match &self.tiles_file {
+                                Some(path) => path.file_name().unwrap().to_str().unwrap(),
+                                None => "No file selected",
+                            }))
+                            .push(scrollable(Text::new("Tiles will go there")).height(Length::Fill))
+                            .push(Button::new("Open tiles").on_press(Message::OpenTiles)),
+                    )
+                    .push(vertical_rule(2))
+                    .push(Column::new()),
+            )
             .into()
     }
 
     fn update(&mut self, message: Self::Message) {
         match message {
-            Message::OpenFile => {
+            Message::OpenTiles => {
                 if self.tiles_file.is_some() {
                     match MessageDialog::new().set_level(rfd::MessageLevel::Warning).set_buttons(rfd::MessageButtons::OkCancel).set_title("Tilesheet already loaded").set_description("A tilesheet is already loaded. Loading a new one will overwrite the previous one, and may break your map").show() {
                         false => return,
