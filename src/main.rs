@@ -3,13 +3,19 @@ use iced::{
     pure::{
         horizontal_rule, scrollable, vertical_rule,
         widget::{Button, Column, Row, Text},
-        Application,
+        Application, Element,
     },
     Alignment, Command, Length, Settings,
 };
 
 use rfd::{AsyncFileDialog, AsyncMessageDialog};
 use std::path::PathBuf;
+
+use asefile::AsepriteParseError;
+
+mod tileselector;
+
+use tileselector::TileSelector;
 
 fn main() -> iced::Result {
     TilemapEditor::run(Settings::default())
@@ -19,12 +25,17 @@ fn main() -> iced::Result {
 struct TilemapEditor {
     tiles_file: Option<PathBuf>,
     loading_tiles: bool,
+    error_message: bool,
+    tile_selector: TileSelector,
 }
 
 #[derive(Debug, Clone)]
-enum Message {
+pub enum Message {
     OpenTiles,
     TilesOpened(Option<PathBuf>),
+    ErrorClosed(()),
+    TileSelected(u32),
+    TileUnSelected,
 }
 
 impl Application for TilemapEditor {
@@ -37,6 +48,8 @@ impl Application for TilemapEditor {
             TilemapEditor {
                 tiles_file: None,
                 loading_tiles: false,
+                error_message: false,
+                tile_selector: TileSelector::default(),
             },
             Command::none(),
         )
@@ -46,11 +59,12 @@ impl Application for TilemapEditor {
         "Tilemap editor".to_string()
     }
 
-    fn view(&self) -> iced::pure::Element<'_, Self::Message> {
+    fn view(&self) -> Element<'_, Self::Message> {
         Column::new()
             // menu bar
             .push(
                 Row::new()
+                    .push(Button::new(Text::new("New")))
                     .push(Button::new(Text::new("Open")))
                     .push(Button::new(Text::new("Save"))),
             )
@@ -67,7 +81,7 @@ impl Application for TilemapEditor {
                                 Some(path) => path.file_name().unwrap().to_str().unwrap(),
                                 None => "No file selected",
                             }))
-                            .push(scrollable(Text::new("Tiles will go there")).height(Length::Fill))
+                            .push(scrollable(self.tile_selector.view()).height(Length::Fill))
                             .push(Button::new("Open tiles").on_press(Message::OpenTiles)),
                     )
                     .push(vertical_rule(2))
@@ -77,7 +91,13 @@ impl Application for TilemapEditor {
     }
 
     fn update(&mut self, message: Self::Message) -> Command<Message> {
-        // don’t process any event if a file is loading
+        if self.error_message {
+            match message {
+                Message::ErrorClosed(_) => self.error_message = false,
+                _ => {}
+            }
+            return Command::none();
+        }
 
         match message {
             Message::OpenTiles => {
@@ -92,12 +112,27 @@ impl Application for TilemapEditor {
                 );
             }
             Message::TilesOpened(new_tiles) => {
-                if new_tiles.is_some() {
-                    self.tiles_file = new_tiles;
-                }
-
                 self.loading_tiles = false;
+
+                if new_tiles.is_some() {
+                    match self.tile_selector.set_content(new_tiles.as_ref().unwrap()) {
+                        Ok(_) => {
+                            self.tiles_file = new_tiles;
+                        }
+                        Err(err) => {
+                            return Command::perform(
+                                Self::error_with_tiles(new_tiles.unwrap(), err),
+                                Message::ErrorClosed,
+                            )
+                        }
+                    }
+                }
             }
+            Message::ErrorClosed(_) => {
+                self.error_message = false;
+            }
+            Message::TileSelected(i) => self.tile_selector.select(i),
+            Message::TileUnSelected => self.tile_selector.unselect(),
         }
 
         Command::none()
@@ -118,5 +153,18 @@ impl TilemapEditor {
             .pick_file()
             .await
             .map(|h| h.path().into());
+    }
+
+    async fn error_with_tiles(file: PathBuf, err: AsepriteParseError) {
+        AsyncMessageDialog::new()
+            .set_level(rfd::MessageLevel::Error)
+            .set_buttons(rfd::MessageButtons::Ok)
+            .set_title("Error opening file")
+            .set_description(&format!(
+                "There was an error opening the file {:?}:\n{}",
+                file, err
+            ))
+            .show()
+            .await;
     }
 }
