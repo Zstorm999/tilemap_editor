@@ -26,7 +26,6 @@ fn main() -> iced::Result {
 
 pub type Tiles = Rc<RefCell<Option<AsepriteFile>>>;
 
-#[derive(Default)]
 struct TilemapEditor {
     tiles_file: Option<PathBuf>,
     loading_tiles: bool,
@@ -58,8 +57,8 @@ impl Application for TilemapEditor {
                 loading_tiles: false,
                 error_message: false,
                 tile_selector: TileSelector::new(tiles.clone()),
+                map_viewer: MapViewer::new(tiles.clone()),
                 tiles,
-                map_viewer: MapViewer::default(),
             },
             Command::none(),
         )
@@ -132,6 +131,7 @@ impl Application for TilemapEditor {
                             *self.tiles.borrow_mut() = Some(f);
 
                             self.tile_selector.reset();
+                            self.map_viewer.reset();
                         }
                         Err(err) => {
                             return Command::perform(

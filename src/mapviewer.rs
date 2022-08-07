@@ -9,7 +9,6 @@ use iced::{
 
 use crate::{tilemap::TileMap, Message, Tiles};
 
-#[derive(Default)]
 pub struct MapViewer {
     map: TileMap,
     cache: canvas::Cache,
@@ -17,11 +16,29 @@ pub struct MapViewer {
 }
 
 impl MapViewer {
+    pub fn new(tiles: Tiles) -> Self {
+        let mut map: TileMap = Default::default();
+
+        map.set_tile(0, 0, Some(0), crate::tilemap::Layer::Background);
+        map.set_tile(0, 1, Some(0), crate::tilemap::Layer::Background);
+        map.set_tile(0, 0, Some(1), crate::tilemap::Layer::Foreground);
+
+        MapViewer {
+            map,
+            cache: Default::default(),
+            tiles,
+        }
+    }
+
     pub fn view(&self) -> Element<'_, Message> {
         Canvas::new(self)
             .width(Length::Fill)
             .height(Length::Fill)
             .into()
+    }
+
+    pub fn reset(&mut self) {
+        self.cache.clear();
     }
 }
 
@@ -67,10 +84,64 @@ impl canvas::Program<Message> for MapViewer {
                 default_colour,
             );
 
-            // draw tiles
-            for y in 0..height {
-                for x in 0..width {
-                    let (bg_tile, fg_tile) = self.map.get_tile(x, y);
+            if let Some(tiles) = &*self.tiles.borrow() {
+                // draw tiles
+                for y in 0..height {
+                    for x in 0..width {
+                        let (bg_tile, fg_tile) = self.map.get_tile(x, y);
+
+                        // draw background first
+                        if let Some(tile) = bg_tile {
+                            if tile < tiles.num_frames() {
+                                // this is a valid index for the current tiles
+                                for (idx, pixel) in
+                                    tiles.frame(tile).image().pixels().take(64).enumerate()
+                                {
+                                    frame.fill_rectangle(
+                                        Point::new(
+                                            x as f32 * (8.0 * SCALE_FACTOR + BORDER_SIZE)
+                                                + (idx % 8) as f32 * SCALE_FACTOR,
+                                            y as f32 * (8.0 * SCALE_FACTOR + BORDER_SIZE)
+                                                + (idx / 8) as f32 * SCALE_FACTOR,
+                                        ),
+                                        Size::new(SCALE_FACTOR, SCALE_FACTOR),
+                                        Color::new(
+                                            pixel.0[0] as f32 / 255.0,
+                                            pixel.0[1] as f32 / 255.0,
+                                            pixel.0[2] as f32 / 255.0,
+                                            pixel.0[3] as f32 / 255.0,
+                                        ),
+                                    )
+                                }
+                            }
+                        }
+
+                        // then draw foreground above
+                        if let Some(tile) = fg_tile {
+                            if tile < tiles.num_frames() {
+                                // this is a valid index for the current tiles
+                                for (idx, pixel) in
+                                    tiles.frame(tile).image().pixels().take(64).enumerate()
+                                {
+                                    frame.fill_rectangle(
+                                        Point::new(
+                                            x as f32 * (8.0 * SCALE_FACTOR + BORDER_SIZE)
+                                                + (idx % 8) as f32 * SCALE_FACTOR,
+                                            y as f32 * (8.0 * SCALE_FACTOR + BORDER_SIZE)
+                                                + (idx / 8) as f32 * SCALE_FACTOR,
+                                        ),
+                                        Size::new(SCALE_FACTOR, SCALE_FACTOR),
+                                        Color::new(
+                                            pixel.0[0] as f32 / 255.0,
+                                            pixel.0[1] as f32 / 255.0,
+                                            pixel.0[2] as f32 / 255.0,
+                                            pixel.0[3] as f32 / 255.0,
+                                        ),
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
