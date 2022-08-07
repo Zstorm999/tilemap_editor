@@ -13,7 +13,6 @@ use crate::{Message, Tiles};
 const TILES_PER_LINE: u32 = 5;
 const SCALE_FACTOR: u32 = 4;
 
-#[derive(Default)]
 pub struct TileSelector {
     selected: Option<u32>,
     content: Tiles,
@@ -178,7 +177,7 @@ impl canvas::Program<Message> for TileSelector {
                         }
                     }
 
-                    for (idx, pixel) in content.frame(i).image().pixels().enumerate() {
+                    for (idx, pixel) in content.frame(i).image().pixels().take(64).enumerate() {
                         frame.with_save(|frame| {
                             // move at pixel location
 
