@@ -42,6 +42,8 @@ pub enum Message {
     ErrorClosed(()), // unit type needed for command
     TileSelected(u32),
     TileUnSelected,
+    PaintTile(u16, u16),
+    ClearTile(u16, u16),
 }
 
 impl Application for TilemapEditor {
@@ -147,6 +149,11 @@ impl Application for TilemapEditor {
             }
             Message::TileSelected(i) => self.tile_selector.select(i),
             Message::TileUnSelected => self.tile_selector.unselect(),
+            Message::PaintTile(x, y) => {
+                self.map_viewer
+                    .set_tile(x, y, self.tile_selector.get_selected())
+            }
+            Message::ClearTile(x, y) => self.map_viewer.set_tile(x, y, None),
         }
 
         Command::none()

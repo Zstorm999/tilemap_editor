@@ -70,6 +70,10 @@ impl TileSelector {
         self.cache.clear();
         // do NOT reset reference to tiles, otherwise it’s lost forever !
     }
+
+    pub fn get_selected(&self) -> Option<u32> {
+        self.selected
+    }
 }
 
 impl canvas::Program<Message> for TileSelector {

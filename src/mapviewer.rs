@@ -1,5 +1,6 @@
 use iced::{
-    canvas::event::Status,
+    canvas::{event::Status, Event},
+    mouse,
     pure::{
         widget::{canvas, Canvas},
         Element,
@@ -7,7 +8,10 @@ use iced::{
     Color, Length, Point, Size,
 };
 
-use crate::{tilemap::TileMap, Message, Tiles};
+use crate::{
+    tilemap::{Layer, TileMap},
+    Message, Tiles,
+};
 
 pub struct MapViewer {
     map: TileMap,
@@ -17,24 +21,26 @@ pub struct MapViewer {
 
 impl MapViewer {
     pub fn new(tiles: Tiles) -> Self {
-        let mut map: TileMap = Default::default();
-
-        map.set_tile(0, 0, Some(0), crate::tilemap::Layer::Background);
-        map.set_tile(0, 1, Some(0), crate::tilemap::Layer::Background);
-        map.set_tile(0, 0, Some(1), crate::tilemap::Layer::Foreground);
-
         MapViewer {
-            map,
+            map: Default::default(),
             cache: Default::default(),
             tiles,
         }
     }
 
     pub fn view(&self) -> Element<'_, Message> {
+        let (width, height) = self.map.get_dimensions();
+        let tile_side = (8.0 * SCALE_FACTOR + BORDER_SIZE) as u16;
+
         Canvas::new(self)
-            .width(Length::Fill)
-            .height(Length::Fill)
+            .width(Length::Units(width * tile_side - 1))
+            .height(Length::Units(height * tile_side - 1))
             .into()
+    }
+
+    pub fn set_tile(&mut self, x: u16, y: u16, value: Option<u32>) {
+        self.map.set_tile(x, y, value, Layer::Background);
+        self.cache.clear();
     }
 
     pub fn reset(&mut self) {
@@ -45,16 +51,70 @@ impl MapViewer {
 const SCALE_FACTOR: f32 = 2.0;
 const BORDER_SIZE: f32 = 1.0;
 
+#[derive(Default)]
+pub struct ViewerState {
+    interaction: Interaction,
+}
+
+#[derive(Default)]
+enum Interaction {
+    #[default]
+    None,
+    Drawing,
+    Erasing,
+}
+
 impl canvas::Program<Message> for MapViewer {
-    type State = ();
+    type State = ViewerState;
 
     fn update(
         &self,
-        _state: &mut Self::State,
-        _event: iced::canvas::Event,
-        _bounds: iced::Rectangle,
-        _cursor: iced::canvas::Cursor,
+        state: &mut Self::State,
+        event: iced::canvas::Event,
+        bounds: iced::Rectangle,
+        cursor: iced::canvas::Cursor,
     ) -> (iced::canvas::event::Status, Option<Message>) {
+        let (x, y) = if let Some(position) = cursor.position_in(&bounds) {
+            let tile_side = 8.0 * SCALE_FACTOR + BORDER_SIZE;
+            (
+                (position.x / tile_side).floor() as u16,
+                (position.y / tile_side).floor() as u16,
+            )
+        } else {
+            return (Status::Ignored, None);
+        };
+
+        match event {
+            Event::Mouse(event) => match event {
+                mouse::Event::ButtonReleased(_) => {
+                    state.interaction = Interaction::None;
+                }
+                mouse::Event::ButtonPressed(button) => match button {
+                    mouse::Button::Left => {
+                        state.interaction = Interaction::Drawing;
+                        return (Status::Captured, Some(Message::PaintTile(x, y)));
+                    }
+                    mouse::Button::Right => {
+                        state.interaction = Interaction::Erasing;
+                        return (Status::Captured, Some(Message::ClearTile(x, y)));
+                    }
+                    _ => {}
+                },
+                mouse::Event::CursorMoved { .. } => match state.interaction {
+                    Interaction::Drawing => {
+                        return (Status::Captured, Some(Message::PaintTile(x, y)))
+                    }
+                    Interaction::Erasing => {
+                        return (Status::Captured, Some(Message::ClearTile(x, y)))
+                    }
+                    _ => {}
+                },
+
+                _ => {}
+            },
+            Event::Keyboard(_) => {}
+        }
+
         (Status::Ignored, None)
     }
 
