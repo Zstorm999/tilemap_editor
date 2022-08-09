@@ -1,4 +1,6 @@
 use std::iter;
+
+#[derive(Debug, Clone)]
 pub struct TileMap {
     background: LayerContent,
     foreground: LayerContent,
@@ -9,6 +11,7 @@ pub enum Layer {
     Foreground,
 }
 
+#[derive(Debug, Clone)]
 struct LayerContent {
     width: u16,
     height: u16,

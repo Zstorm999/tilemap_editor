@@ -46,6 +46,10 @@ impl MapViewer {
     pub fn reset(&mut self) {
         self.cache.clear();
     }
+
+    pub fn get_map_instant(&self) -> TileMap {
+        self.map.clone()
+    }
 }
 
 const SCALE_FACTOR: f32 = 2.0;

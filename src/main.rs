@@ -10,10 +10,12 @@ use iced::{
 
 use rfd::{AsyncFileDialog, AsyncMessageDialog};
 use std::{cell::RefCell, path::PathBuf, rc::Rc};
+use tilemap::TileMap;
 
 use asefile::{AsepriteFile, AsepriteParseError};
 
 mod mapviewer;
+mod save;
 mod tilemap;
 mod tileselector;
 
@@ -30,6 +32,7 @@ struct TilemapEditor {
     tiles_file: Option<PathBuf>,
     loading_tiles: bool,
     error_message: bool,
+    saving_map: bool,
     tile_selector: TileSelector,
     tiles: Tiles,
     map_viewer: MapViewer,
@@ -37,11 +40,19 @@ struct TilemapEditor {
 
 #[derive(Debug, Clone)]
 pub enum Message {
+    ErrorClosed(()), // unit type needed for command
+
+    // handling UI major buttons
+    SaveMap,
+    MapSaved(Option<String>),
+
+    // tiles selector events
     OpenTiles,
     TilesOpened(Option<PathBuf>),
-    ErrorClosed(()), // unit type needed for command
     TileSelected(u32),
     TileUnSelected,
+
+    // map viewer events
     PaintTile(u16, u16),
     ClearTile(u16, u16),
 }
@@ -58,6 +69,7 @@ impl Application for TilemapEditor {
                 tiles_file: None,
                 loading_tiles: false,
                 error_message: false,
+                saving_map: false,
                 tile_selector: TileSelector::new(tiles.clone()),
                 map_viewer: MapViewer::new(tiles.clone()),
                 tiles,
@@ -77,7 +89,7 @@ impl Application for TilemapEditor {
                 Row::new()
                     .push(Button::new(Text::new("New")))
                     .push(Button::new(Text::new("Open")))
-                    .push(Button::new(Text::new("Save"))),
+                    .push(Button::new(Text::new("Save")).on_press(Message::SaveMap)),
             )
             .push(horizontal_rule(2))
             // window content
@@ -111,6 +123,35 @@ impl Application for TilemapEditor {
         }
 
         match message {
+            Message::ErrorClosed(_) => {
+                self.error_message = false;
+            }
+
+            Message::SaveMap => {
+                if self.saving_map {
+                    return Command::none();
+                }
+                self.saving_map = true;
+
+                return Command::perform(
+                    Self::save_map(self.map_viewer.get_map_instant()),
+                    Message::MapSaved,
+                );
+            }
+            Message::MapSaved(potential_error) => {
+                self.saving_map = false;
+                match potential_error {
+                    None => {}
+                    Some(error_message) => {
+                        self.error_message = true;
+                        return Command::perform(
+                            Self::error_with_save(error_message),
+                            Message::ErrorClosed,
+                        );
+                    }
+                }
+            }
+
             Message::OpenTiles => {
                 if self.loading_tiles {
                     return Command::none();
@@ -122,6 +163,7 @@ impl Application for TilemapEditor {
                     Message::TilesOpened,
                 );
             }
+
             Message::TilesOpened(new_tiles) => {
                 self.loading_tiles = false;
 
@@ -144,9 +186,7 @@ impl Application for TilemapEditor {
                     }
                 }
             }
-            Message::ErrorClosed(_) => {
-                self.error_message = false;
-            }
+
             Message::TileSelected(i) => self.tile_selector.select(i),
             Message::TileUnSelected => self.tile_selector.unselect(),
             Message::PaintTile(x, y) => {
@@ -185,6 +225,32 @@ impl TilemapEditor {
                 "There was an error opening the file {:?}:\n{}",
                 file, err
             ))
+            .show()
+            .await;
+    }
+
+    async fn save_map(map: TileMap) -> Option<String> {
+        if let Some(file) = AsyncFileDialog::new()
+            .add_filter("RON", &["ron", "RON"])
+            .save_file()
+            .await
+            .map(|h| h.path().into())
+        {
+            return match save::save_in_file(map, file) {
+                Ok(_) => None,
+                Err(err) => Some(err.to_string()),
+            };
+        }
+
+        None
+    }
+
+    async fn error_with_save(message: String) {
+        AsyncMessageDialog::new()
+            .set_level(rfd::MessageLevel::Error)
+            .set_buttons(rfd::MessageButtons::Ok)
+            .set_title("Error saving map")
+            .set_description(&format!("There was an error saving the map :\n{}", message))
             .show()
             .await;
     }
