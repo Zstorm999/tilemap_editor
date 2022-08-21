@@ -20,6 +20,7 @@ mod tilemap;
 mod tileselector;
 
 use mapviewer::MapViewer;
+use tilemap::Tile;
 use tileselector::TileSelector;
 
 fn main() -> iced::Result {
@@ -189,10 +190,13 @@ impl Application for TilemapEditor {
 
             Message::TileSelected(i) => self.tile_selector.select(i),
             Message::TileUnSelected => self.tile_selector.unselect(),
-            Message::PaintTile(x, y) => {
-                self.map_viewer
-                    .set_tile(x, y, self.tile_selector.get_selected())
-            }
+            Message::PaintTile(x, y) => self.map_viewer.set_tile(
+                x,
+                y,
+                self.tile_selector
+                    .get_selected()
+                    .map_or(None, |tile| Some(Tile::new(tile, false, false))),
+            ),
             Message::ClearTile(x, y) => self.map_viewer.set_tile(x, y, None),
         }
 

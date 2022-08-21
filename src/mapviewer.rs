@@ -9,7 +9,7 @@ use iced::{
 };
 
 use crate::{
-    tilemap::{Layer, TileMap},
+    tilemap::{Layer, Tile, TileMap},
     Message, Tiles,
 };
 
@@ -38,7 +38,7 @@ impl MapViewer {
             .into()
     }
 
-    pub fn set_tile(&mut self, x: u16, y: u16, value: Option<u32>) {
+    pub fn set_tile(&mut self, x: u16, y: u16, value: Option<Tile>) {
         self.map.set_tile(x, y, value, Layer::Background);
         self.cache.clear();
     }
@@ -156,10 +156,14 @@ impl canvas::Program<Message> for MapViewer {
 
                         // draw background first
                         if let Some(tile) = bg_tile {
-                            if tile < tiles.num_frames() {
+                            if tile.value < tiles.num_frames() {
                                 // this is a valid index for the current tiles
-                                for (idx, pixel) in
-                                    tiles.frame(tile).image().pixels().take(64).enumerate()
+                                for (idx, pixel) in tiles
+                                    .frame(tile.value)
+                                    .image()
+                                    .pixels()
+                                    .take(64)
+                                    .enumerate()
                                 {
                                     frame.fill_rectangle(
                                         Point::new(
@@ -182,10 +186,14 @@ impl canvas::Program<Message> for MapViewer {
 
                         // then draw foreground above
                         if let Some(tile) = fg_tile {
-                            if tile < tiles.num_frames() {
+                            if tile.value < tiles.num_frames() {
                                 // this is a valid index for the current tiles
-                                for (idx, pixel) in
-                                    tiles.frame(tile).image().pixels().take(64).enumerate()
+                                for (idx, pixel) in tiles
+                                    .frame(tile.value)
+                                    .image()
+                                    .pixels()
+                                    .take(64)
+                                    .enumerate()
                                 {
                                     frame.fill_rectangle(
                                         Point::new(

@@ -2,7 +2,7 @@ use ron::ser::PrettyConfig;
 use serde::Serialize;
 use std::{fs, io, path::PathBuf};
 
-use crate::tilemap::TileMap;
+use crate::tilemap::{Tile, TileMap};
 
 #[derive(Serialize)]
 struct TileMapStorage {
@@ -14,7 +14,7 @@ struct TileMapStorage {
 
 #[derive(Serialize)]
 struct Layer {
-    tiles: Vec<Option<u32>>,
+    tiles: Vec<Option<Tile>>,
 }
 
 impl From<TileMap> for TileMapStorage {

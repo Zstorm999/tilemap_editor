@@ -1,5 +1,7 @@
 use std::iter;
 
+use serde::{Deserialize, Serialize};
+
 #[derive(Debug, Clone)]
 pub struct TileMap {
     background: LayerContent,
@@ -15,7 +17,24 @@ pub enum Layer {
 struct LayerContent {
     width: u16,
     height: u16,
-    tiles: Vec<Vec<Option<u32>>>,
+    tiles: Vec<Vec<Option<Tile>>>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct Tile {
+    pub value: u32,
+    pub h_flip: bool,
+    pub v_flip: bool,
+}
+
+impl Tile {
+    pub fn new(value: u32, h_flip: bool, v_flip: bool) -> Self {
+        Tile {
+            value,
+            h_flip,
+            v_flip,
+        }
+    }
 }
 
 impl Default for TileMap {
@@ -32,14 +51,14 @@ impl TileMap {
         }
     }
 
-    pub fn set_tile(&mut self, x: u16, y: u16, value: Option<u32>, layer: Layer) {
+    pub fn set_tile(&mut self, x: u16, y: u16, value: Option<Tile>, layer: Layer) {
         match layer {
             Layer::Background => self.background.set_tile(x, y, value),
             Layer::Foreground => self.foreground.set_tile(x, y, value),
         }
     }
 
-    pub fn get_tile(&self, x: u16, y: u16) -> (Option<u32>, Option<u32>) {
+    pub fn get_tile(&self, x: u16, y: u16) -> (Option<Tile>, Option<Tile>) {
         (
             self.background.get_tile(x, y),
             self.foreground.get_tile(x, y),
@@ -69,14 +88,14 @@ impl LayerContent {
         }
     }
 
-    fn set_tile(&mut self, x: u16, y: u16, value: Option<u32>) {
+    fn set_tile(&mut self, x: u16, y: u16, value: Option<Tile>) {
         let x = x as usize;
         let y = y as usize;
 
         self.tiles[x][y] = value;
     }
 
-    fn get_tile(&self, x: u16, y: u16) -> Option<u32> {
+    fn get_tile(&self, x: u16, y: u16) -> Option<Tile> {
         let x = x as usize;
         let y = y as usize;
 
