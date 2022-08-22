@@ -14,6 +14,7 @@ use crate::{
 };
 
 pub struct MapViewer {
+    pub modified: bool,
     map: TileMap,
     cache: canvas::Cache,
     tiles: Tiles,
@@ -22,6 +23,7 @@ pub struct MapViewer {
 impl MapViewer {
     pub fn new(tiles: Tiles) -> Self {
         MapViewer {
+            modified: false,
             map: Default::default(),
             cache: Default::default(),
             tiles,
@@ -39,6 +41,7 @@ impl MapViewer {
     }
 
     pub fn set_tile(&mut self, x: u16, y: u16, value: Option<Tile>) {
+        self.modified = true;
         self.map.set_tile(x, y, value, Layer::Background);
         self.cache.clear();
     }
@@ -49,6 +52,11 @@ impl MapViewer {
 
     pub fn get_map_instant(&self) -> TileMap {
         self.map.clone()
+    }
+
+    pub fn set_entire_map(&mut self, map: TileMap) {
+        self.map = map;
+        self.modified = false;
     }
 }
 

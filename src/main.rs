@@ -31,12 +31,38 @@ pub type Tiles = Rc<RefCell<Option<AsepriteFile>>>;
 
 struct TilemapEditor {
     tiles_file: Option<PathBuf>,
-    loading_tiles: bool,
-    error_message: bool,
-    saving_map: bool,
+    loading_state: LoadingState,
     tile_selector: TileSelector,
     tiles: Tiles,
     map_viewer: MapViewer,
+}
+
+enum LoadingState {
+    Inactive,
+    OpeningMap,
+    SavingMap,
+    LoadingTiles,
+    Error,
+}
+
+impl LoadingState {
+    fn inactive(&self) -> bool {
+        match self {
+            LoadingState::Inactive => true,
+            _ => false,
+        }
+    }
+
+    fn active(&self) -> bool {
+        !self.inactive()
+    }
+
+    fn is_error(&self) -> bool {
+        match self {
+            LoadingState::Error => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -44,6 +70,8 @@ pub enum Message {
     ErrorClosed(()), // unit type needed for command
 
     // handling UI major buttons
+    OpenMap,
+    MapOpened(Option<PathBuf>),
     SaveMap,
     MapSaved(Option<String>),
 
@@ -68,9 +96,7 @@ impl Application for TilemapEditor {
         (
             TilemapEditor {
                 tiles_file: None,
-                loading_tiles: false,
-                error_message: false,
-                saving_map: false,
+                loading_state: LoadingState::Inactive,
                 tile_selector: TileSelector::new(tiles.clone()),
                 map_viewer: MapViewer::new(tiles.clone()),
                 tiles,
@@ -115,9 +141,9 @@ impl Application for TilemapEditor {
     }
 
     fn update(&mut self, message: Self::Message) -> Command<Message> {
-        if self.error_message {
+        if self.loading_state.is_error() {
             match message {
-                Message::ErrorClosed(_) => self.error_message = false,
+                Message::ErrorClosed(_) => self.loading_state = LoadingState::Inactive,
                 _ => {}
             }
             return Command::none();
@@ -125,39 +151,52 @@ impl Application for TilemapEditor {
 
         match message {
             Message::ErrorClosed(_) => {
-                self.error_message = false;
+                self.loading_state = LoadingState::Inactive;
             }
 
+            Message::OpenMap => {
+                return Command::perform(
+                    Self::open_map(self.map_viewer.modified),
+                    Message::MapOpened,
+                )
+            }
+
+            Message::MapOpened(new_map) => match new_map {
+                Some(new_map) => {}
+                None => {}
+            },
+
             Message::SaveMap => {
-                if self.saving_map {
+                if self.loading_state.active() {
                     return Command::none();
                 }
-                self.saving_map = true;
+
+                self.loading_state = LoadingState::SavingMap;
 
                 return Command::perform(
                     Self::save_map(self.map_viewer.get_map_instant()),
                     Message::MapSaved,
                 );
             }
-            Message::MapSaved(potential_error) => {
-                self.saving_map = false;
-                match potential_error {
-                    None => {}
-                    Some(error_message) => {
-                        self.error_message = true;
-                        return Command::perform(
-                            Self::error_with_save(error_message),
-                            Message::ErrorClosed,
-                        );
-                    }
+            Message::MapSaved(potential_error) => match potential_error {
+                None => {
+                    self.loading_state = LoadingState::Inactive;
+                    self.map_viewer.modified = false;
                 }
-            }
+                Some(error_message) => {
+                    self.loading_state = LoadingState::Error;
+                    return Command::perform(
+                        Self::error_with_save(error_message),
+                        Message::ErrorClosed,
+                    );
+                }
+            },
 
             Message::OpenTiles => {
-                if self.loading_tiles {
+                if self.loading_state.active() {
                     return Command::none();
                 }
-                self.loading_tiles = true;
+                self.loading_state = LoadingState::LoadingTiles;
 
                 return Command::perform(
                     Self::open_tiles(self.tiles_file.is_some()),
@@ -166,7 +205,7 @@ impl Application for TilemapEditor {
             }
 
             Message::TilesOpened(new_tiles) => {
-                self.loading_tiles = false;
+                self.loading_state = LoadingState::Inactive;
 
                 if new_tiles.is_some() {
                     let file = AsepriteFile::read_file(&new_tiles.as_ref().unwrap());
@@ -179,10 +218,11 @@ impl Application for TilemapEditor {
                             self.map_viewer.reset();
                         }
                         Err(err) => {
+                            self.loading_state = LoadingState::Error;
                             return Command::perform(
                                 Self::error_with_tiles(new_tiles.clone().unwrap(), err),
                                 Message::ErrorClosed,
-                            )
+                            );
                         }
                     }
                 }
@@ -205,22 +245,21 @@ impl Application for TilemapEditor {
 }
 
 impl TilemapEditor {
-    async fn open_tiles(has_a_file: bool) -> Option<PathBuf> {
-        if has_a_file {
-            match AsyncMessageDialog::new().set_level(rfd::MessageLevel::Warning).set_buttons(rfd::MessageButtons::OkCancel).set_title("Tilesheet already loaded").set_description("A tilesheet is already loaded. Loading a new one will overwrite the previous one, and may break your map").show().await {
-                false => return None,
-                true => {},
+    async fn open_map(modified: bool) -> Option<PathBuf> {
+        if modified {
+            if !AsyncMessageDialog::new().set_level(rfd::MessageLevel::Warning).set_buttons(rfd::MessageButtons::YesNo).set_title("Map modified").set_description("The current tilemap has been modified since last save. Do you still want to open a new one ? All changes will be lost").show().await {
+                return None;
             }
         }
 
         return AsyncFileDialog::new()
-            .add_filter("aseprite", &["ase", "aseprite"])
+            .add_filter("RON", &["ron", "RON"])
             .pick_file()
             .await
             .map(|h| h.path().into());
     }
 
-    async fn error_with_tiles(file: PathBuf, err: AsepriteParseError) {
+    async fn error_opening_map(file: PathBuf, err: String) {
         AsyncMessageDialog::new()
             .set_level(rfd::MessageLevel::Error)
             .set_buttons(rfd::MessageButtons::Ok)
@@ -255,6 +294,34 @@ impl TilemapEditor {
             .set_buttons(rfd::MessageButtons::Ok)
             .set_title("Error saving map")
             .set_description(&format!("There was an error saving the map :\n{}", message))
+            .show()
+            .await;
+    }
+
+    async fn open_tiles(has_a_file: bool) -> Option<PathBuf> {
+        if has_a_file {
+            match AsyncMessageDialog::new().set_level(rfd::MessageLevel::Warning).set_buttons(rfd::MessageButtons::OkCancel).set_title("Tilesheet already loaded").set_description("A tilesheet is already loaded. Loading a new one will overwrite the previous one, and may break your map").show().await {
+                false => return None,
+                true => {},
+            }
+        }
+
+        return AsyncFileDialog::new()
+            .add_filter("aseprite", &["ase", "aseprite"])
+            .pick_file()
+            .await
+            .map(|h| h.path().into());
+    }
+
+    async fn error_with_tiles(file: PathBuf, err: AsepriteParseError) {
+        AsyncMessageDialog::new()
+            .set_level(rfd::MessageLevel::Error)
+            .set_buttons(rfd::MessageButtons::Ok)
+            .set_title("Error opening file")
+            .set_description(&format!(
+                "There was an error opening the file {:?}:\n{}",
+                file, err
+            ))
             .show()
             .await;
     }
