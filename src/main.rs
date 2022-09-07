@@ -39,6 +39,7 @@ struct TilemapEditor {
 
 enum LoadingState {
     Inactive,
+    NewMap,
     OpeningMap,
     SavingMap,
     LoadingTiles,
@@ -70,6 +71,8 @@ pub enum Message {
     ErrorClosed(()), // unit type needed for command
 
     // handling UI major buttons
+    NewMap,
+    CreateNewMap(bool),
     OpenMap,
     MapOpened(Option<PathBuf>),
     SaveMap,
@@ -114,7 +117,7 @@ impl Application for TilemapEditor {
             // menu bar
             .push(
                 Row::new()
-                    .push(Button::new(Text::new("New")))
+                    .push(Button::new(Text::new("New")).on_press(Message::NewMap))
                     .push(Button::new(Text::new("Open")).on_press(Message::OpenMap))
                     .push(Button::new(Text::new("Save")).on_press(Message::SaveMap)),
             )
@@ -152,6 +155,23 @@ impl Application for TilemapEditor {
         match message {
             Message::ErrorClosed(_) => {
                 self.loading_state = LoadingState::Inactive;
+            }
+
+            Message::NewMap => {
+                self.loading_state = LoadingState::NewMap;
+
+                return Command::perform(
+                    Self::new_map(self.map_viewer.modified),
+                    Message::CreateNewMap,
+                );
+            }
+
+            Message::CreateNewMap(create) => {
+                self.loading_state = LoadingState::Inactive;
+
+                if create {
+                    self.map_viewer.set_entire_map(TileMap::new(32, 32))
+                }
             }
 
             Message::OpenMap => {
@@ -268,11 +288,14 @@ impl Application for TilemapEditor {
 }
 
 impl TilemapEditor {
+    async fn new_map(modified: bool) -> bool {
+        // only case where we do not create a new map is modified and !keep, corresponding to a NAND
+        !(modified && keep_modifications().await)
+    }
+
     async fn open_map(modified: bool) -> Option<PathBuf> {
-        if modified {
-            if !AsyncMessageDialog::new().set_level(rfd::MessageLevel::Warning).set_buttons(rfd::MessageButtons::YesNo).set_title("Map modified").set_description("The current tilemap has been modified since last save. Do you still want to open a new one ? All changes will be lost").show().await {
-                return None;
-            }
+        if modified && keep_modifications().await {
+            return None;
         }
 
         return AsyncFileDialog::new()
@@ -348,4 +371,14 @@ impl TilemapEditor {
             .show()
             .await;
     }
+}
+
+/// Prompts the user if they want to keep overwrite their modifications.
+///
+/// Returns `true` if they should be kept, or `false` if they should be overwritten.
+async fn keep_modifications() -> bool {
+    if !AsyncMessageDialog::new().set_level(rfd::MessageLevel::Warning).set_buttons(rfd::MessageButtons::YesNo).set_title("Map modified").set_description("The current tilemap has been modified since last save. Do you still want to open a new one ? All changes will be lost").show().await {
+        return true;
+    }
+    return false;
 }
