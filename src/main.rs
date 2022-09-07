@@ -115,7 +115,7 @@ impl Application for TilemapEditor {
             .push(
                 Row::new()
                     .push(Button::new(Text::new("New")))
-                    .push(Button::new(Text::new("Open")))
+                    .push(Button::new(Text::new("Open")).on_press(Message::OpenMap))
                     .push(Button::new(Text::new("Save")).on_press(Message::SaveMap)),
             )
             .push(horizontal_rule(2))
@@ -155,16 +155,38 @@ impl Application for TilemapEditor {
             }
 
             Message::OpenMap => {
+                if self.loading_state.active() {
+                    return Command::none();
+                }
+
+                self.loading_state = LoadingState::OpeningMap;
+
                 return Command::perform(
                     Self::open_map(self.map_viewer.modified),
                     Message::MapOpened,
-                )
+                );
             }
 
-            Message::MapOpened(new_map) => match new_map {
-                Some(new_map) => {}
-                None => {}
-            },
+            Message::MapOpened(new_map_file) => {
+                self.loading_state = LoadingState::Inactive;
+                match new_map_file {
+                    Some(new_map_file) => {
+                        let new_map = save::load_from_file(&new_map_file);
+
+                        match new_map {
+                            Ok(new_map) => self.map_viewer.set_entire_map(new_map),
+                            Err(err) => {
+                                self.loading_state = LoadingState::Error;
+                                return Command::perform(
+                                    Self::error_opening_map(new_map_file, err.to_string()),
+                                    Message::ErrorClosed,
+                                );
+                            }
+                        }
+                    }
+                    None => {}
+                }
+            }
 
             Message::SaveMap => {
                 if self.loading_state.active() {
@@ -215,7 +237,7 @@ impl Application for TilemapEditor {
                             *self.tiles.borrow_mut() = Some(f);
 
                             self.tile_selector.reset();
-                            self.map_viewer.reset();
+                            self.map_viewer.refresh();
                         }
                         Err(err) => {
                             self.loading_state = LoadingState::Error;

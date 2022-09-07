@@ -46,7 +46,7 @@ impl MapViewer {
         self.cache.clear();
     }
 
-    pub fn reset(&mut self) {
+    pub fn refresh(&mut self) {
         self.cache.clear();
     }
 
@@ -57,6 +57,7 @@ impl MapViewer {
     pub fn set_entire_map(&mut self, map: TileMap) {
         self.map = map;
         self.modified = false;
+        self.cache.clear();
     }
 }
 
@@ -150,12 +151,14 @@ impl canvas::Program<Message> for MapViewer {
 
             let tile_side = 8.0 * SCALE_FACTOR + BORDER_SIZE;
 
+            // fill base colour
             frame.fill_rectangle(
                 Point::new(0.0, 0.0),
                 Size::new(width as f32 * tile_side, height as f32 * tile_side),
                 default_colour,
             );
 
+            // fill tiles
             if let Some(tiles) = &*self.tiles.borrow() {
                 // draw tiles
                 for y in 0..height {
