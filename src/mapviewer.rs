@@ -46,6 +46,14 @@ impl MapViewer {
         self.cache.clear();
     }
 
+    pub fn get_tile(&self, x: u16, y: u16, layer: Layer) -> Option<Tile> {
+        let tiles = self.map.get_tile(x, y);
+        match layer {
+            Layer::Background => tiles.0,
+            Layer::Foreground => tiles.1,
+        }
+    }
+
     pub fn refresh(&mut self) {
         self.cache.clear();
     }

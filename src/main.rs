@@ -10,7 +10,7 @@ use iced::{
 
 use rfd::{AsyncFileDialog, AsyncMessageDialog};
 use std::{cell::RefCell, path::PathBuf, rc::Rc};
-use tilemap::TileMap;
+use tilemap::{Layer, TileMap};
 
 use asefile::{AsepriteFile, AsepriteParseError};
 
@@ -255,9 +255,10 @@ impl Application for TilemapEditor {
             Message::PaintTile(x, y) => self.map_viewer.set_tile(
                 x,
                 y,
-                self.tile_selector
-                    .get_selected()
-                    .map_or(None, |tile| Some(Tile::new(tile, false, false))),
+                self.tile_selector.get_selected().map_or_else(
+                    || self.map_viewer.get_tile(x, y, Layer::Background), // default preserves tile
+                    |tile| Some(Tile::new(tile, false, false)),           // otherwise overwrite it
+                ),
             ),
             Message::ClearTile(x, y) => self.map_viewer.set_tile(x, y, None),
         }
