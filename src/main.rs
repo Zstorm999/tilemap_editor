@@ -2,10 +2,13 @@ use iced::{
     executor,
     pure::{
         horizontal_rule, scrollable, vertical_rule,
-        widget::{Button, Column, Row, Text},
+        widget::{
+            svg::{self, Svg},
+            Button, Column, Row, Text,
+        },
         Application, Element,
     },
-    Alignment, Command, Length, Settings,
+    Alignment, Command, Length, Settings, Space,
 };
 
 use rfd::{AsyncFileDialog, AsyncMessageDialog};
@@ -16,10 +19,12 @@ use asefile::{AsepriteFile, AsepriteParseError};
 
 mod mapviewer;
 mod save;
+mod style;
 mod tilemap;
 mod tileselector;
 
-use mapviewer::MapViewer;
+use mapviewer::{MapViewer, Tool};
+use style::SelectorTheme;
 use tilemap::Tile;
 use tileselector::TileSelector;
 
@@ -84,6 +89,8 @@ pub enum Message {
     TileSelected(u32),
     TileUnSelected,
 
+    ToolSelected(Tool),
+
     // map viewer events
     PaintTile(u16, u16),
     ClearTile(u16, u16),
@@ -95,6 +102,7 @@ impl Application for TilemapEditor {
     type Flags = ();
 
     fn new(_flags: Self::Flags) -> (Self, Command<Message>) {
+        println!(env!("CARGO_MANIFEST_DIR"));
         let tiles = Rc::new(RefCell::new(None));
         (
             TilemapEditor {
@@ -113,6 +121,12 @@ impl Application for TilemapEditor {
     }
 
     fn view(&self) -> Element<'_, Self::Message> {
+        let tool_button = |intended, img| {
+            Button::new(load_svg(img))
+                .style(SelectorTheme::pick(self.map_viewer.tool, intended))
+                .on_press(Message::ToolSelected(intended))
+        };
+
         Column::new()
             // menu bar
             .push(
@@ -138,7 +152,18 @@ impl Application for TilemapEditor {
                             .push(Button::new("Open tiles").on_press(Message::OpenTiles)),
                     )
                     .push(vertical_rule(2))
-                    .push(Column::new().push(self.map_viewer.view())),
+                    .push(
+                        Column::new()
+                            .push(Space::new(Length::Fill, Length::Units(3)))
+                            .push(
+                                Row::new()
+                                    .push(tool_button(Tool::Pen, "pencil.svg"))
+                                    .push(tool_button(Tool::Rect, "rectangle.svg"))
+                                    .push(tool_button(Tool::Selection, "selection.svg")),
+                            )
+                            .push(Space::new(Length::Fill, Length::Units(3)))
+                            .push(self.map_viewer.view()),
+                    ),
             )
             .into()
     }
@@ -272,6 +297,9 @@ impl Application for TilemapEditor {
 
             Message::TileSelected(i) => self.tile_selector.select(i),
             Message::TileUnSelected => self.tile_selector.unselect(),
+
+            Message::ToolSelected(t) => self.map_viewer.tool = t,
+
             Message::PaintTile(x, y) => self.map_viewer.set_tile(
                 x,
                 y,
@@ -289,7 +317,7 @@ impl Application for TilemapEditor {
 
 impl TilemapEditor {
     async fn new_map(modified: bool) -> bool {
-        // only case where we do not create a new map is modified and !keep, corresponding to a NAND
+        // only case where we do not create a new map is modified and keep, corresponding to a NAND
         !(modified && keep_modifications().await)
     }
 
@@ -381,4 +409,18 @@ async fn keep_modifications() -> bool {
         return true;
     }
     return false;
+}
+
+fn load_svg(name: &str) -> Svg {
+    Svg::from_path(format!(
+        "{}/img/{}",
+        if cfg!(debug_assertions) {
+            env!("CARGO_MANIFEST_DIR")
+        } else {
+            "."
+        },
+        name
+    ))
+    .width(Length::Units(24))
+    .height(Length::Units(24))
 }

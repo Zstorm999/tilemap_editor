@@ -15,9 +15,17 @@ use crate::{
 
 pub struct MapViewer {
     pub modified: bool,
+    pub tool: Tool,
     map: TileMap,
     cache: canvas::Cache,
     tiles: Tiles,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Tool {
+    Pen,
+    Rect,
+    Selection,
 }
 
 impl MapViewer {
@@ -27,6 +35,7 @@ impl MapViewer {
             map: Default::default(),
             cache: Default::default(),
             tiles,
+            tool: Tool::Pen,
         }
     }
 
