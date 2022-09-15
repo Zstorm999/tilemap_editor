@@ -289,6 +289,9 @@ impl canvas::Program<Message> for MapViewer {
 
 fn draw_tile(tile: Tile, x: u16, y: u16, frame: &mut Frame, tiles: &AsepriteFile) {
     if tile.value < tiles.num_frames() {
+        let base_x = x as f32 * (8.0 * SCALE_FACTOR + BORDER_SIZE);
+        let base_y = y as f32 * (8.0 * SCALE_FACTOR + BORDER_SIZE);
+
         // this is a valid index for the current tiles
         for (idx, pixel) in tiles
             .frame(tile.value)
@@ -297,11 +300,11 @@ fn draw_tile(tile: Tile, x: u16, y: u16, frame: &mut Frame, tiles: &AsepriteFile
             .take(64)
             .enumerate()
         {
+            let x = if tile.h_flip { 7 - (idx % 8) } else { idx % 8 } as f32;
+            let y = if tile.v_flip { (64 - idx) / 8 } else { idx / 8 } as f32;
+
             frame.fill_rectangle(
-                Point::new(
-                    x as f32 * (8.0 * SCALE_FACTOR + BORDER_SIZE) + (idx % 8) as f32 * SCALE_FACTOR,
-                    y as f32 * (8.0 * SCALE_FACTOR + BORDER_SIZE) + (idx / 8) as f32 * SCALE_FACTOR,
-                ),
+                Point::new(base_x + x * SCALE_FACTOR, base_y + y * SCALE_FACTOR),
                 Size::new(SCALE_FACTOR, SCALE_FACTOR),
                 Color::new(
                     pixel.0[0] as f32 / 255.0,
