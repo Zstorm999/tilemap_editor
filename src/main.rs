@@ -92,8 +92,11 @@ pub enum Message {
     ToolSelected(Tool),
 
     // map viewer events
+    Redraw,
     PaintTile(u16, u16),
     ClearTile(u16, u16),
+    RectStarted,
+    PaintRect(u16, u16, i32, i32),
 }
 
 impl Application for TilemapEditor {
@@ -300,6 +303,8 @@ impl Application for TilemapEditor {
 
             Message::ToolSelected(t) => self.map_viewer.tool = t,
 
+            Message::Redraw => self.map_viewer.refresh(),
+
             Message::PaintTile(x, y) => self.map_viewer.set_tile(
                 x,
                 y,
@@ -309,6 +314,17 @@ impl Application for TilemapEditor {
                 ),
             ),
             Message::ClearTile(x, y) => self.map_viewer.set_tile(x, y, None),
+
+            Message::RectStarted => {
+                self.map_viewer.tile = self
+                    .tile_selector
+                    .get_selected()
+                    .map_or(None, |tile| Some(Tile::new(tile, false, false)))
+            }
+
+            Message::PaintRect(x, y, width, height) => {
+                self.map_viewer.fill_rect(x, y, width, height)
+            }
         }
 
         Command::none()
