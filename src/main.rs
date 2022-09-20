@@ -2,7 +2,7 @@ use iced::{
     executor,
     pure::{
         horizontal_rule, scrollable, vertical_rule,
-        widget::{svg::Svg, Button, Column, Row, Text},
+        widget::{svg::Svg, Button, Checkbox, Column, Row, Text},
         Application, Element,
     },
     Alignment, Command, Length, Settings, Space,
@@ -37,6 +37,8 @@ struct TilemapEditor {
     tile_selector: TileSelector,
     tiles: Tiles,
     map_viewer: MapViewer,
+    horizontal_flip: bool,
+    vertical_flip: bool,
 }
 
 enum LoadingState {
@@ -86,7 +88,10 @@ pub enum Message {
     TileSelected(u32),
     TileUnSelected,
 
+    // Toolbar events
     ToolSelected(Tool),
+    HorizontalFlip(bool),
+    VerticalFlip(bool),
 
     // map viewer events
     Redraw,
@@ -111,6 +116,8 @@ impl Application for TilemapEditor {
                 tile_selector: TileSelector::new(tiles.clone()),
                 map_viewer: MapViewer::new(tiles.clone()),
                 tiles,
+                horizontal_flip: false,
+                vertical_flip: false,
             },
             Command::none(),
         )
@@ -125,6 +132,12 @@ impl Application for TilemapEditor {
             Button::new(load_svg(img))
                 .style(SelectorTheme::pick(self.map_viewer.tool, intended))
                 .on_press(Message::ToolSelected(intended))
+        };
+
+        let check_button = |value, img, f: fn(bool) -> Message| {
+            Button::new(load_svg(img))
+                .style(SelectorTheme::pick(value, true))
+                .on_press(f(!value))
         };
 
         Column::new()
@@ -159,7 +172,19 @@ impl Application for TilemapEditor {
                                 Row::new()
                                     .push(tool_button(Tool::Pen, "pencil.svg"))
                                     .push(tool_button(Tool::Rect, "rectangle.svg"))
-                                    .push(tool_button(Tool::Selection, "selection.svg")),
+                                    .push(tool_button(Tool::Selection, "selection.svg"))
+                                    .push(Space::new(Length::Fill, Length::Shrink))
+                                    .push(check_button(
+                                        self.horizontal_flip,
+                                        "horizontal_flip.svg",
+                                        Message::HorizontalFlip,
+                                    ))
+                                    .push(check_button(
+                                        self.vertical_flip,
+                                        "vertical_flip.svg",
+                                        Message::VerticalFlip,
+                                    ))
+                                    .push(Space::new(Length::Fill, Length::Shrink)),
                             )
                             .push(Space::new(Length::Fill, Length::Units(3)))
                             .push(self.map_viewer.view()),
@@ -299,6 +324,8 @@ impl Application for TilemapEditor {
             Message::TileUnSelected => self.tile_selector.unselect(),
 
             Message::ToolSelected(t) => self.map_viewer.tool = t,
+            Message::HorizontalFlip(f) => self.horizontal_flip = f,
+            Message::VerticalFlip(f) => self.vertical_flip = f,
 
             Message::Redraw => self.map_viewer.refresh(),
 
@@ -307,16 +334,15 @@ impl Application for TilemapEditor {
                 y,
                 self.tile_selector.get_selected().map_or_else(
                     || self.map_viewer.get_tile(x, y, Layer::Background), // if no selected tile preserves current tile
-                    |tile| Some(Tile::new(tile, false, false)),           // otherwise overwrite it
+                    |tile| Some(Tile::new(tile, self.horizontal_flip, self.vertical_flip)), // otherwise overwrite it
                 ),
             ),
             Message::ClearTile(x, y) => self.map_viewer.set_tile(x, y, None),
 
             Message::RectStarted => {
-                self.map_viewer.tile = self
-                    .tile_selector
-                    .get_selected()
-                    .map_or(None, |tile| Some(Tile::new(tile, false, false)))
+                self.map_viewer.tile = self.tile_selector.get_selected().map_or(None, |tile| {
+                    Some(Tile::new(tile, self.horizontal_flip, self.vertical_flip))
+                })
             }
 
             Message::PaintRect(x, y, width, height) => {
