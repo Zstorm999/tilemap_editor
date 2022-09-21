@@ -30,6 +30,7 @@ impl button::StyleSheet for BtSelected {
     fn active(&self) -> button::Style {
         button::Style {
             background: Color::from_rgb(0.4, 0.4, 0.4).into(),
+            border_radius: 3.0,
             ..Default::default()
         }
     }
