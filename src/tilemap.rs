@@ -1,4 +1,4 @@
-use std::iter;
+use std::{fmt::Display, iter};
 
 use serde::{Deserialize, Serialize};
 
@@ -8,9 +8,27 @@ pub struct TileMap {
     foreground: LayerContent,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Layer {
     Background,
     Foreground,
+}
+
+impl Layer {
+    pub const ALL: [Layer; 2] = [Layer::Background, Layer::Foreground];
+}
+
+impl Display for Layer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Layer::Background => "Background",
+                Layer::Foreground => "Foreground",
+            }
+        )
+    }
 }
 
 #[derive(Debug, Clone)]

@@ -1,8 +1,8 @@
 use iced::{
     executor,
     pure::{
-        horizontal_rule, scrollable, vertical_rule,
-        widget::{svg::Svg, Button, Checkbox, Column, Row, Text},
+        horizontal_rule, pick_list, scrollable, vertical_rule,
+        widget::{svg::Svg, Button, Column, Row, Text},
         Application, Element,
     },
     Alignment, Command, Length, Settings, Space,
@@ -92,6 +92,7 @@ pub enum Message {
     ToolSelected(Tool),
     HorizontalFlip(bool),
     VerticalFlip(bool),
+    LayerChanged(Layer),
 
     // map viewer events
     Redraw,
@@ -184,7 +185,12 @@ impl Application for TilemapEditor {
                                         "vertical_flip.svg",
                                         Message::VerticalFlip,
                                     ))
-                                    .push(Space::new(Length::Fill, Length::Shrink)),
+                                    .push(Space::new(Length::Fill, Length::Shrink))
+                                    .push(pick_list(
+                                        &Layer::ALL[..],
+                                        Some(self.map_viewer.layer),
+                                        Message::LayerChanged,
+                                    )),
                             )
                             .push(Space::new(Length::Fill, Length::Units(3)))
                             .push(self.map_viewer.view()),
@@ -326,6 +332,10 @@ impl Application for TilemapEditor {
             Message::ToolSelected(t) => self.map_viewer.tool = t,
             Message::HorizontalFlip(f) => self.horizontal_flip = f,
             Message::VerticalFlip(f) => self.vertical_flip = f,
+            Message::LayerChanged(layer) => {
+                self.map_viewer.layer = layer;
+                self.map_viewer.refresh()
+            }
 
             Message::Redraw => self.map_viewer.refresh(),
 
@@ -333,7 +343,7 @@ impl Application for TilemapEditor {
                 x,
                 y,
                 self.tile_selector.get_selected().map_or_else(
-                    || self.map_viewer.get_tile(x, y, Layer::Background), // if no selected tile preserves current tile
+                    || self.map_viewer.get_tile(x, y, self.map_viewer.layer), // if no selected tile preserves current tile
                     |tile| Some(Tile::new(tile, self.horizontal_flip, self.vertical_flip)), // otherwise overwrite it
                 ),
             ),

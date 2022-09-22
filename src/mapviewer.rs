@@ -18,6 +18,7 @@ pub struct MapViewer {
     pub modified: bool,
     pub tool: Tool,
     pub tile: Option<Tile>,
+    pub layer: Layer,
     map: TileMap,
     cache: canvas::Cache,
     tiles: Tiles,
@@ -36,6 +37,7 @@ impl MapViewer {
             modified: false,
             map: Default::default(),
             tile: None,
+            layer: Layer::Background,
             cache: Default::default(),
             tiles,
             tool: Tool::Pen,
@@ -54,7 +56,7 @@ impl MapViewer {
 
     pub fn set_tile(&mut self, x: u16, y: u16, value: Option<Tile>) {
         self.modified = true;
-        self.map.set_tile(x, y, value, Layer::Background);
+        self.map.set_tile(x, y, value, self.layer);
         self.cache.clear();
     }
 
@@ -237,12 +239,12 @@ impl canvas::Program<Message> for MapViewer {
 
                         // draw background first
                         if let Some(tile) = bg_tile {
-                            draw_tile(tile, x, y, frame, tiles);
+                            draw_tile(tile, x, y, frame, tiles, false);
                         }
 
                         // then draw foreground above
                         if let Some(tile) = fg_tile {
-                            draw_tile(tile, x, y, frame, tiles);
+                            draw_tile(tile, x, y, frame, tiles, self.layer == Layer::Background);
                         }
                     }
                 }
@@ -257,7 +259,7 @@ impl canvas::Program<Message> for MapViewer {
                     for x in min_x..(min_x + width.abs()) {
                         for y in min_y..(min_y + height.abs()) {
                             if let Some(tile) = self.tile {
-                                draw_tile(tile, x as u16, y as u16, frame, tiles);
+                                draw_tile(tile, x as u16, y as u16, frame, tiles, false);
                             }
                         }
                     }
@@ -287,7 +289,14 @@ impl canvas::Program<Message> for MapViewer {
     }
 }
 
-fn draw_tile(tile: Tile, x: u16, y: u16, frame: &mut Frame, tiles: &AsepriteFile) {
+fn draw_tile(
+    tile: Tile,
+    x: u16,
+    y: u16,
+    frame: &mut Frame,
+    tiles: &AsepriteFile,
+    transparent: bool,
+) {
     if tile.value < tiles.num_frames() {
         let base_x = x as f32 * (8.0 * SCALE_FACTOR + BORDER_SIZE);
         let base_y = y as f32 * (8.0 * SCALE_FACTOR + BORDER_SIZE);
@@ -310,7 +319,7 @@ fn draw_tile(tile: Tile, x: u16, y: u16, frame: &mut Frame, tiles: &AsepriteFile
                     pixel.0[0] as f32 / 255.0,
                     pixel.0[1] as f32 / 255.0,
                     pixel.0[2] as f32 / 255.0,
-                    pixel.0[3] as f32 / 255.0,
+                    if transparent { 0.5 } else { 1.0 },
                 ),
             )
         }
